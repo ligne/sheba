@@ -129,10 +129,12 @@ sub _run_command
         my $cmd_exit   = $res->{retval} >> 8;
         my $cmd_signal = $res->{retval} & 127;
 
-        # FIXME report stdout/err for debugging...
-        warn Dumper $res;
+        say '#' x 80;
+        say "'$cmd_str' exited with status $cmd_exit/$cmd_signal.\n";
+        say "\nSTDERR:"; say foreach (@{$res->{stderr}});
+        say "\nSTDOUT:"; say foreach (@{$res->{stdout}});
+        say '#' x 80;
 
-        warn "'$cmd_str' exited with status $cmd_exit/$cmd_signal.\n";
         return 0;
     }
 
