@@ -16,9 +16,7 @@ use Data::Dumper;
 sub load_config
 {
     return {
-        branches => [qw(
-            origin/master
-        )],
+        branch => 'origin/master',
 
         parrot_upstream => 'git://github.com/parrot/parrot.git',
         parrot_clone    => '/home/local/mlb/.smokers/parrot1',
@@ -174,24 +172,21 @@ sub main
     # make sure it's up-to-date
     $repo->command('fetch');
 
-    # fetch the branches and configurations to test
-    my @branches       = @{$config->{branches}};
+    # fetch the configurations to test
     my @configurations = parrot_configs($config);
 
-    foreach my $branch (@branches) {
-        # checkout the branch
-        $repo->command(qw( checkout -q ), $branch);
+    # checkout the branch
+    $repo->command(qw( checkout -q ), $config->{branch});
 
-        foreach my $config (@configurations) {
-            make_clean() if -e 'Makefile';
+    foreach my $config (@configurations) {
+        make_clean() if -e 'Makefile';
 
-            configure(@$config)
-                && make()
-                && make_test()
-                && next;
+        configure(@$config)
+            && make()
+            && make_test()
+            && next;
 
-            say "Error running config: ", join ' ', _flatten(@$config);
-        }
+        say "Error running config: ", join ' ', _flatten(@$config);
     }
 
     return 0;
