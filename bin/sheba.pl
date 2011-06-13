@@ -115,8 +115,6 @@ sub _run_command
 {
     my (@cmd) = @_;
 
-    @cmd = _flatten(@cmd);
-
     my $res = Munin::Node::OS->run_as_child(
         3600,  # in seconds.  FIXME get rid of this.
         sub { exec {$cmd[0]} @cmd or die "Error exec()ing @cmd: $!" },
@@ -179,20 +177,21 @@ sub main
     $repo->command(qw( checkout -q ), $branch || $config->{branch});
 
     foreach my $config (@configurations) {
+        my @config = _flatten(@$config);
         # FIXME still build, just suppress errors.  then report if it built ok.
-        if ('--cc=clang' ~~ $config and '--optimize' ~~ $config) {
+        if ('--cc=clang' ~~ @config and '--optimize' ~~ @config) {
             warn "clang can't build an optimised Parrot\n";
             next;
         }
 
         make_clean() if -e 'Makefile';
 
-        configure(@$config)
+        configure(@config)
             && make()
             && make_test()
             && next;
 
-        say "Error running config: ", join ' ', _flatten(@$config);
+        say "Error running config: ", join ' ', @config;
     }
 
     return 0;
