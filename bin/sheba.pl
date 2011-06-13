@@ -158,7 +158,7 @@ sub make_test { return _run_command(qw( make --silent test )) }
 
 sub main
 {
-    my (@ARGV) = @_;
+    my ($branch) = @_;
 
     # load the config
     my $config = load_config();
@@ -176,7 +176,7 @@ sub main
     my @configurations = parrot_configs($config);
 
     # checkout the branch
-    $repo->command(qw( checkout -q ), $config->{branch});
+    $repo->command(qw( checkout -q ), $branch || $config->{branch});
 
     foreach my $config (@configurations) {
         # FIXME still build, just suppress errors.  then report if it built ok.
