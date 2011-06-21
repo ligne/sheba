@@ -153,7 +153,6 @@ sub main
         my @config = _flatten(@$config);
         # FIXME still build, just suppress errors.  then report if it built ok.
         if ('--cc=clang' ~~ @config and '--optimize' ~~ @config) {
-            warn "clang can't build an optimised Parrot\n";
             next;
         }
 
