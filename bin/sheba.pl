@@ -1,4 +1,7 @@
 #!/usr/bin/perl
+#
+# Builds and tests the Parrot in the current directory.
+#
 
 use strict;
 use warnings;
@@ -6,21 +9,14 @@ use warnings;
 use 5.10.0;
 
 use Munin::Node::OS;
-use Git;
 use List::PowerSet qw( powerset );
 use Tie::Pick;
-use Data::Dumper;
 
 
 # returns a config hash thing
 sub load_config
 {
     return {
-        branch => 'origin/master',
-
-        parrot_upstream => 'git://github.com/parrot/parrot.git',
-        parrot_clone    => '/home/local/mlb/.smokers/parrot1',
-
         parrot_configs => [
             [],
             [qw( --cc=g++ --link=g++ --ld=g++ )],
@@ -90,18 +86,6 @@ sub random_config_generator
 }
 
 
-# return a handle to a copy of the repository for running tests in
-# FIXME this is a terrible name.  it should hint that a chdir() will happen.
-sub repository
-{
-    my ($dir) = @_;
-
-    chdir $dir or die "Unable to change to '$dir': $!";
-
-    return Git->repository(DIRECTORY => $dir);
-}
-
-
 # flattens a list
 sub _flatten { return map { ref eq 'ARRAY' ? @$_ : $_ } @_ }
 
@@ -156,25 +140,14 @@ sub make_test { return _run_command(qw( make --silent test )) }
 
 sub main
 {
-    my ($branch) = @_;
-
     # load the config
     my $config = load_config();
 
     local $ENV{TEST_JOBS}       = $config->{test_jobs};
     local $ENV{HARNESS_VERBOSE} = $config->{harness_verbosity};
 
-    # get the test repository, and move there
-    my $repo = repository($config->{parrot_clone});
-
-    # make sure it's up-to-date
-    $repo->command('fetch');
-
     # fetch the configurations to test
     my @configurations = parrot_configs($config);
-
-    # checkout the branch
-    $repo->command(qw( checkout -q ), $branch || $config->{branch});
 
     foreach my $config (@configurations) {
         my @config = _flatten(@$config);
