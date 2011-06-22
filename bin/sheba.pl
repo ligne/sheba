@@ -99,6 +99,8 @@ sub _run_command
 {
     my (@cmd) = @_;
 
+    my $args = pop @cmd if ref $cmd[-1] eq 'HASH';
+
     unless (run \@cmd, '>&', \(my $out_and_err)) {
         my $exit = $?;
         my $cmd_str = join ' ', @cmd;
@@ -120,14 +122,11 @@ sub _run_command
 # get all nicely scrubbed up
 sub make_clean { return _run_command(qw( make --silent realclean )) }
 
-
 # configure parrot
 sub configure { return _run_command(qw( perl Configure.pl --silent ), @_) }
 
-
 # make Parrot
-sub make { return _run_command(qw( make -j6 --silent )) }
-
+sub make { return _run_command(qw( make -j6 --silent ), @_) }
 
 # run the tests
 sub make_test { return _run_command(qw( make --silent test )) }
