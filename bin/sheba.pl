@@ -90,32 +90,48 @@ sub random_config_generator
 sub _flatten { return map { ref eq 'ARRAY' ? @$_ : $_ } @_ }
 
 
-# flattens @cmd, and runs it in a subprocess.  if it fails, spew the output to
-# the screen in the hopes that it might be useful.
+# _run_command(@command, [ \%options ]);
 #
-# FIXME lots.  report errors in a better way.  enable some sort of debugging
-# Output.  blah blah blah.
+# runs @command in a subprocess.  returns true if it completed ok, false
+# otherwise.
+#
+# by default it prints the std{out,err} output iff the command failed, in the
+# hopes that it might be useful.
+#
+# %options modify behaviour.  currently it only supports 'todo', which is
+# analogous to todo blocks in Test::More:  the command is expected to fail, so
+# output is suppressed by default
 sub _run_command
 {
     my (@cmd) = @_;
 
-    my $args = pop @cmd if ref $cmd[-1] eq 'HASH';
+    my $opts = pop @cmd if ref $cmd[-1] eq 'HASH';
 
-    unless (run \@cmd, '>&', \(my $out_and_err)) {
-        my $exit = $?;
-        my $cmd_str = join ' ', @cmd;
+    @cmd = grep defined, @cmd;  # FIXME shoudn't really be necessary
+
+    my $success = run \@cmd, '>&', \(my $out_and_err);
+    my $exit    = $?;
+
+    my $cmd_str = join ' ', @cmd;
+
+    if ($success and $opts->{todo}) {
+        say '#' x 80;
+        say "'$cmd_str' unexpectedly succeeded.\n";
+        say '#' x 80;
+    }
+
+    if (not $success and not $opts->{todo}) {
         my $cmd_exit   = $exit >> 8;
         my $cmd_signal = $exit & 127;
 
         say '#' x 80;
         say "'$cmd_str' exited with status $cmd_exit/$cmd_signal.\n";
         say $out_and_err;
-        say '#' x 80;
 
         return 0;
     }
 
-    return 1;
+    return $success;
 }
 
 
@@ -145,15 +161,16 @@ sub main
 
     foreach my $config (@configurations) {
         my @config = _flatten(@$config);
-        # FIXME still build, just suppress errors.  then report if it built ok.
+        my $make_opts;
+
         if ('--cc=clang' ~~ @config and '--optimize' ~~ @config) {
-            next;
+            $make_opts->{todo} = 1;
         }
 
         make_clean() if -e 'Makefile';
 
         configure(@config)
-            && make()
+            && make($make_opts)
             && make_test()
             && next;
 
