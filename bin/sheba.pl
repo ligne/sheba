@@ -8,7 +8,7 @@ use warnings;
 
 use 5.10.0;
 
-use Munin::Node::OS;
+use IPC::Run       qw( run );
 use List::PowerSet qw( powerset );
 use Tie::Pick;
 
@@ -99,20 +99,15 @@ sub _run_command
 {
     my (@cmd) = @_;
 
-    my $res = Munin::Node::OS->run_as_child(
-        3600,  # in seconds.  FIXME get rid of this.
-        sub { exec {$cmd[0]} @cmd or die "Error exec()ing @cmd: $!" },
-    );
-
-    if ($res->{retval}) {
+    unless (run \@cmd, '>&', \(my $out_and_err)) {
+        my $exit = $?;
         my $cmd_str = join ' ', @cmd;
-        my $cmd_exit   = $res->{retval} >> 8;
-        my $cmd_signal = $res->{retval} & 127;
+        my $cmd_exit   = $exit >> 8;
+        my $cmd_signal = $exit & 127;
 
         say '#' x 80;
         say "'$cmd_str' exited with status $cmd_exit/$cmd_signal.\n";
-        say "\nSTDERR:"; say foreach (@{$res->{stderr}});
-        say "\nSTDOUT:"; say foreach (@{$res->{stdout}});
+        say $out_and_err;
         say '#' x 80;
 
         return 0;
