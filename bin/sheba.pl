@@ -11,6 +11,7 @@ use 5.10.0;
 use IPC::Run       qw( run );
 use List::PowerSet qw( powerset );
 use Tie::Pick;
+use BSD::Resource;
 
 
 # returns a config hash thing
@@ -59,6 +60,13 @@ sub load_config
         test_jobs => 6,
 
         harness_verbosity => -2,
+
+        priority => 10,   # niceness
+        limits => {
+            # see BSD::Resource docs for details
+            cpu      => 600,  # cpu time in seconds
+            as       => 1e9,  # memory usage (stack, heap, et al.)
+        },
     };
 }
 
@@ -88,6 +96,33 @@ sub random_config_generator
 
 # flattens a list
 sub _flatten { return map { ref eq 'ARRAY' ? @$_ : $_ } @_ }
+
+
+sub set_limits
+{
+    my ($priority, $limits) = @_;
+
+    if (defined $priority) {
+        # catch exceptions when setpriority(2) isn't available.
+        # which = PRIO_PROCESS, who = self.
+        eval { setpriority(0, 0, $priority) }
+            or warn "Failed to set priority: $!\n";
+    }
+
+    return unless $limits;
+
+    my $rlimits = get_rlimits();
+
+    while (my ($name, $limit) = each %$limits) {
+        my $resource = $rlimits->{"RLIMIT_\U$name\E"};
+        say "Limiting '$name' is not supported on this system"
+                unless defined $resource;
+
+        # set both hard and soft to the same limit
+        setrlimit($resource, $limit, $limit)
+                or say "Failed to set priority: $!";
+    }
+}
 
 
 # _run_command(@command, [ \%options ]);
@@ -155,6 +190,8 @@ sub main
 
     local $ENV{TEST_JOBS}       = $config->{test_jobs};
     local $ENV{HARNESS_VERBOSE} = $config->{harness_verbosity};
+
+    set_limits($config->{priority}, $config->{limits});
 
     # fetch the configurations to test
     my @configurations = parrot_configs($config);
