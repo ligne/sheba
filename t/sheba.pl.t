@@ -101,6 +101,16 @@ sub report_limits
 
     eq_or_diff($limits{RLIMIT_CPU}, 600, 'limited the CPU time') or diag($output);
 }
+{
+    run sub {
+        set_limits(undef, { as => 10 });
+        report_limits();
+        my $str = 'x' x 1e6;  # 1MB should be enough to trigger this
+        exit 0;
+    }, '&>', \(my $output);
+
+    ok($?, 'subprocess was killed due to too much memory usage');
+}
 
 
 ### _run_command
