@@ -23,6 +23,37 @@ require 'bin/sheba.pl';
 
 
 ### parrot_configs
+{
+    my $config;
+
+    $config->{parrot_configs} = [
+        [qw( --optimize --without-gmp )],
+    ];
+    $config->{parrot_all_config_opts} = [qw(
+        --optimize
+        --without-threads
+        --without-core-nci-thunks
+    )];
+
+    {
+        my @configs = parrot_configs($config);
+        is_deeply($configs[0], [ qw( --optimize --without-gmp )], 'static config only');
+
+        $config->{parrot_configs} = [
+            [qw( --optimize --without-gmp )],
+            ('random') x 2,
+        ];
+    }
+    {
+        my @configs = parrot_configs($config);
+        is(scalar @configs, 3, 'got 3 configs') or next;
+        is_deeply($configs[0], [ qw( --optimize --without-gmp )], 'static config is first');
+
+        is("@{$configs[1]}", "@{$configs[1]}", 'the random configuration is equal to itself (sanity check)');
+        isnt("@{$configs[1]}", "@{$configs[2]}", 'the random configurations are different');
+    }
+}
+
 
 
 ### random_config_generator
