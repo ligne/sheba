@@ -64,8 +64,8 @@ require 'bin/sheba.pl';
 
 
 ### _flatten
-eq_or_diff([ _flatten(1, 2, 3) ],    [ 1, 2, 3]);
-eq_or_diff([ _flatten(1, [ 2, 3]) ], [ 1, 2, 3]);
+eq_or_diff([ _flatten(1, 2, 3) ],    [ 1, 2, 3], 'flat list');
+eq_or_diff([ _flatten(1, [ 2, 3]) ], [ 1, 2, 3], 'nested list');
 
 
 ### set_limits
@@ -110,6 +110,14 @@ sub report_limits
     }, '&>', \(my $output);
 
     ok($?, 'subprocess was killed due to too much memory usage');
+}
+{
+    run sub {
+        set_limits(undef, { blahblah => 600 });
+        report_limits()
+    }, '&>', \(my $output);
+
+    like($output, qr('blahblah' is not supported), 'error when setting an unknown limit');
 }
 
 
