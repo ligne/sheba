@@ -125,62 +125,110 @@ sub set_limits
 }
 
 
-# _run_command(@command, [ \%options ]);
-#
-# runs @command in a subprocess.  returns true if it completed ok, false
-# otherwise.
-#
-# by default it prints the std{out,err} output iff the command failed, in the
-# hopes that it might be useful.
-#
-# %options modify behaviour.  currently it only supports 'todo', which is
-# analogous to todo blocks in Test::More:  the command is expected to fail, so
-# output is suppressed by default
+# runs @command in a subprocess.  returns true if it completed ok, and a
+# hashref with some diagnostic information otherwise.
 sub _run_command
 {
     my (@cmd) = @_;
 
-    my $opts = pop @cmd if ref $cmd[-1] eq 'HASH';
+    my $success = run \@cmd, '&>', \(my $out_and_err);
+    my $exit = $? or return;
 
-    @cmd = grep defined, @cmd;  # FIXME shoudn't really be necessary
-
-    my $success = run \@cmd, '>&', \(my $out_and_err);
-    my $exit    = $?;
-
-    my $cmd_str = join ' ', @cmd;
-
-    if ($success and $opts->{todo}) {
-        say '#' x 80;
-        say "'$cmd_str' unexpectedly succeeded.\n";
-        say '#' x 80;
-    }
-
-    if (not $success and not $opts->{todo}) {
-        my $cmd_exit   = $exit >> 8;
-        my $cmd_signal = $exit & 127;
-
-        say '#' x 80;
-        say "'$cmd_str' exited with status $cmd_exit/$cmd_signal.\n";
-        say $out_and_err;
-
-        return 0;
-    }
-
-    return $success;
+    return {
+        command => "@cmd",
+        exit    => $exit >> 8,
+        signal  => $exit & 127,
+        output  => \$out_and_err,
+    };
 }
 
 
-# get all nicely scrubbed up
-sub make_clean { return _run_command(qw( make --silent realclean )) }
+# takes an arrayref with a set of configure options, and tests it.  reports any
+# problems to stdout.
+sub test_configuration
+{
+    my ($config, $configuration) = @_;
 
-# configure parrot
-sub configure { return _run_command(qw( perl Configure.pl --silent ), @_) }
+    my @configuration = _flatten(@$configuration);
 
-# make Parrot
-sub make { return _run_command(qw( make -j6 --silent ), @_) }
+    # FIXME this is quite ugly...
+    my @build_commands = (
+        [qw( perl Configure.pl --silent ), @configuration ],
+        [qw( make --silent ), "-j$config->{make_jobs}" ],
+        [qw( make --silent test )],
+    );
 
-# run the tests
-sub make_test { return _run_command(qw( make --silent test )) }
+    _run_command(qw( make --silent realclean )) if -e 'Makefile';
+
+    foreach my $step (@build_commands) {
+        my $status = _run_command(@$step);
+
+        if ($status) {
+            report_unexpected_failure(\@configuration, $status)
+                unless expected_failure(\@configuration);
+
+            # can't proceed any further, so give up.  (though some errors might
+            # be recoverable, just by redoing.  in fact, just retrying could be
+            # a cheap way to distinguish them!  that's probably a different job
+            # though.)
+            return;
+        }
+    }
+
+    report_unexpected_success(\@configuration)
+        if expected_failure(\@configuration);
+
+    return;
+}
+
+
+# returns true if the set of parrot configuration options is known to be
+# problematic.
+sub expected_failure
+{
+    my ($configuration) = @_;
+
+#    return true if $config is a superset of any known failure
+#    FIXME should check that the error output matches an appropriate pattern?
+    return 1 if (   '--cc=clang' ~~ $configuration
+                and '--optimize' ~~ $configuration);
+
+    return 0;
+}
+
+
+# prints a hopefully useful message about an unexpected failure.
+#
+# takes a reference to the configuration options array, and the status hashref
+# returned by _run_command.  returns nothing.
+sub report_unexpected_failure
+{
+    my ($configuration, $status) = @_;
+
+    say '#' x 80;
+    say "'$status->{command}' exited with status $status->{exit}/$status->{signal}.\n";
+    say ${$status->{output}};
+
+    say "Error running configuration: '@$configuration'";
+    say '#' x 80;
+
+    return;
+}
+
+
+# prints a hopefully useful (and cheering) message about an unexpected success.
+#
+# takes a reference to the configuratiopn options array.  returns nothing.
+sub report_unexpected_success
+{
+    my ($configuration) = @_;
+
+    say '#' x 80;
+    say "Configuration '@$configuration' unexpectedly succeeded.\n";
+    say '#' x 80;
+
+    return;
+}
 
 
 sub main
@@ -196,23 +244,7 @@ sub main
     # fetch the configurations to test
     my @configurations = parrot_configs($config);
 
-    foreach my $config (@configurations) {
-        my @config = _flatten(@$config);
-        my $make_opts;
-
-        if ('--cc=clang' ~~ @config and '--optimize' ~~ @config) {
-            $make_opts->{todo} = 1;
-        }
-
-        make_clean() if -e 'Makefile';
-
-        configure(@config)
-            && make($make_opts)
-            && make_test()
-            && next;
-
-        say "Error running config: ", join ' ', @config;
-    }
+    test_configuration($config, $_) foreach @configurations;
 
     return 0;
 }
