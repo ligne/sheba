@@ -13,7 +13,7 @@ use BSD::Resource;
 
 
 # returns a config hash thing
-my @settings = (
+my %settings = (
     make_jobs => 6,
     test_jobs => 6,
 
@@ -61,13 +61,14 @@ sub run_command
 {
     my (@cmd) = @_;
 
-    my $success = run \@cmd, '&>', \(my $out_and_err);
-    my $exit = $? or return;
+    my $success = run \@cmd, '&>', \(my $out_and_err), init => sub {
+        set_limits(@settings{qw( priority limits )});
+    };
 
-    return {
+    return $? == 0 ? () : {
         command => "@cmd",
-        exit    => $exit >> 8,
-        signal  => $exit & 127,
+        exit    => $? >> 8,
+        signal  => $? & 127,
         output  => \$out_and_err,
     };
 }

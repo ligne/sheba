@@ -16,13 +16,8 @@ use Sheba::Tester;
 
 sub main
 {
-    # load the config
-#    my $config = load_config();
-
 #    local $ENV{TEST_JOBS}       = $config->{test_jobs};
 #    local $ENV{HARNESS_VERBOSE} = $config->{harness_verbosity};
-#
-#    set_limits($config->{priority}, $config->{limits});
 
     my $tester = Sheba::Tester->new();
 
