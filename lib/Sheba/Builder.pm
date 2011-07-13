@@ -15,9 +15,6 @@ use BSD::Resource;
 # returns a config hash thing
 my %settings = (
     make_jobs => 6,
-    test_jobs => 6,
-
-    harness_verbosity => -2,
 
     priority => 10,   # niceness
     limits => {

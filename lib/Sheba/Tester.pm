@@ -59,6 +59,12 @@ my @options_list = (
 );
 
 
+my %config = (
+    test_jobs         =>  6,
+    harness_verbosity => -2,
+);
+
+
 # a constructor.  what did you expect? ;-)
 sub new { return bless {}, (shift) }
 
@@ -108,6 +114,10 @@ sub test_configuration
     my ($self, $configuration) = @_;
 
     my @configuration = _flatten(@$configuration);
+
+    # FIXME not a great place to put it...
+    local $ENV{TEST_JOBS}       = $config{test_jobs};
+    local $ENV{HARNESS_VERBOSE} = $config{harness_verbosity};
 
     # FIXME this is quite ugly...
     my @build_commands = (

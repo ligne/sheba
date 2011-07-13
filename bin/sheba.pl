@@ -13,19 +13,9 @@ use lib "$FindBin::Bin/../lib";
 
 use Sheba::Tester;
 
+my $tester = Sheba::Tester->new();
 
-sub main
-{
-#    local $ENV{TEST_JOBS}       = $config->{test_jobs};
-#    local $ENV{HARNESS_VERBOSE} = $config->{harness_verbosity};
-
-    my $tester = Sheba::Tester->new();
-
-    return $tester->run_tests;
-}
-
-
-exit main(@ARGV) unless caller;
+exit $tester->run_tests;
 
 
 # vim: sw=4 : ts=4 : et
