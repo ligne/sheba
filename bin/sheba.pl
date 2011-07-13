@@ -15,7 +15,8 @@ use Sheba::Tester;
 
 my $tester = Sheba::Tester->new();
 
-exit $tester->run_tests;
+$tester->run_tests;
 
+exit 0;
 
 # vim: sw=4 : ts=4 : et
