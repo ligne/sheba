@@ -10,7 +10,11 @@ use 5.10.0;
 
 use Git;
 use File::Spec ();
+
 use FindBin;
+use lib "$FindBin::Bin/../lib";
+
+use Sheba::Tester;
 
 
 # returns a config hash thing
@@ -65,11 +69,10 @@ sub main
     # make sure the repository is up-to-date
     $repo->command('fetch');
 
-    my $sheba = File::Spec->catfile($FindBin::Bin, 'sheba.pl');
-
     foreach my $b (@branches) {
         $repo->command(qw( checkout -q ), $b);
-        system($sheba);
+        my $tester = Sheba::Tester->new();
+        $tester->run_tests();
     }
 
     return 0;
