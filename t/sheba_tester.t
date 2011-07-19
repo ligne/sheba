@@ -50,6 +50,31 @@ new_ok('Sheba::Tester');
 =cut
 
 
+### _expand_configurations
+{
+    my @tests = (
+        [
+            [qw( --without-one --without-two )], [
+                [qw( --without-one --without-two )],
+            ], 'single config',
+        ],
+        [
+            [qw( --without-one --without-two? )], [
+                [qw( --without-one )],
+                [qw( --without-one --without-two )],
+            ], 'with an optional item',
+        ],
+    );
+
+    my $tester = Sheba::Tester->new();
+
+    foreach my $t (@tests) {
+        my ($in, $out, $desc) = @$t;
+        eq_or_diff([ $tester->_expand_configuration($in) ], $out, $desc);
+    }
+}
+
+
 ### random_config_generator
 {
     ok(Sheba::Tester::random_config_generator(qw( 1 2 3 )), 'returns a generator thing');
@@ -62,6 +87,7 @@ eq_or_diff([ Sheba::Tester::_flatten(1, [ 2, 3]) ], [ 1, 2, 3], 'nested list');
 
 
 ### run_tests
+
 
 ### test_configuration
 =cut

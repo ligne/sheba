@@ -17,23 +17,16 @@ use Sheba::Builder;
 
 # the standard list of configurations to test.
 my @standard_configurations = (
-    [],
-    [qw( --cc=g++ --link=g++ --ld=g++ )],
+    [qw(                   --optimize? )],
+    [qw( --cc=g++   --link=g++   --ld=g++ )],
     [qw( --cc=clang --link=clang --ld=clang )],
-    [qw( --without-gmp )],
-    [qw( --without-icu )],
-    [qw( --without-libffi )],
-    [qw( --without-zlib )],
-    [qw( --optimize )],
-    [qw( --optimize --without-gmp )],
-    [qw( --optimize --without-icu )],
-    [qw( --optimize --without-libffi )],
-    [qw( --optimize --without-zlib )],
-    [qw( --without-gettext --without-gmp --without-libffi --without-extra-nci-thunks --without-opengl --without-readline --without-pcre --without-zlib --without-threads --without-icu )],
-    [qw( --without-gettext --without-gmp --without-libffi --without-extra-nci-thunks --without-opengl --without-readline --without-pcre --without-zlib --without-threads --without-icu --optimize )],
-    [qw( --optimize --without-threads )],
-    [qw( --without-threads )],
-    ('random') x 10,
+    [qw( --without-gmp     --optimize? )],
+    [qw( --without-icu     --optimize? )],
+    [qw( --without-libffi  --optimize? )],
+    [qw( --without-zlib    --optimize? )],
+    [qw( --without-threads --optimize? )],
+    [qw( --without-gettext --without-gmp --without-libffi --without-extra-nci-thunks --without-opengl --without-readline --without-pcre --without-zlib --without-threads --without-icu --optimize? )],
+    ('random') x 3,
 );
 
 
@@ -78,8 +71,28 @@ sub configuration_list
 {
     my ($self) = @_;
 
-    my $ps = random_config_generator(@options_list);
-    return map { $_ eq 'random' ? Tie::Pick::FETCH($ps) : $_ } @standard_configurations;
+    $self->{random_config_generator} ||= random_config_generator(@options_list);
+    return map { $self->_expand_configuration($_) } @standard_configurations;
+}
+
+
+# convert a configuration as specified above, into something that can be fed to
+# Configure.pl.  Can currently handle:
+#
+# + just a hashref (returns it directly)
+# + if an item ends in a question mark, two configs are returned:  one with,
+#   and one without
+# + if it's the string 'random', it returns a randomly generated configuration.
+#
+# always returns a list of one or more hashrefs.
+sub _expand_configuration
+{
+    my ($self, $config) = @_;
+
+    return
+        $config eq 'random' ? Tie::Pick::FETCH($self->{random_config_generator}) :
+        $config ~~ qr(\?)   ? ([ grep !m{\?}, @$config ], [ map { s/\?//; $_ } @$config ])               :
+                              $config                                            ;
 }
 
 
