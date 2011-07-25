@@ -8,6 +8,8 @@ use warnings;
 
 use 5.10.0;
 
+use lib 'lib/';
+
 use FindBin;
 use lib "$FindBin::Bin/../lib";
 

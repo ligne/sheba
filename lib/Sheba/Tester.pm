@@ -11,6 +11,7 @@ use 5.10.0;
 
 use List::PowerSet qw( powerset );
 use Tie::Pick;
+use Config;
 
 use Sheba::Builder;
 
@@ -30,69 +31,68 @@ my @standard_configurations = (
 );
 
 
-# a (more or less) exhaustive list of options that can be passed to
-# Configure.pl
+# options that can be passed to Configure.pl, but which can't easily be
+# extracted automatically
 my @options_list = (
     [qw( --cc=clang --link=clang --ld=clang )],
     [qw( --cc=g++ --link=g++ --ld=g++ )],
-    qw(
-        --optimize
-        --without-threads
-        --without-core-nci-thunks
-        --without-extra-nci-thunks
-        --without-gettext
-        --without-gmp
-        --without-libffi
-        --without-opengl
-        --without-readline
-        --without-pcre
-        --without-zlib
-        --without-icu
-    ),
-);
-
-
-my %config = (
-    test_jobs         =>  6,
-    harness_verbosity => -2,
+    qw( --optimize ),
 );
 
 
 # a constructor.  what did you expect? ;-)
-sub new { return bless {}, (shift) }
-
-
-# List of configs to test.  each element is an arrayref that will be passed to
-# Configure.pl, or the string 'random', which will be replaced with a randomly
-# generated group of options.
-#
-# FIXME it's actually random now, but only at the cost of evil gut-poking
-sub configuration_list
+sub new
 {
-    my ($self) = @_;
+    my ($class, %args) = @_;
 
-    $self->{random_config_generator} ||= random_config_generator(@options_list);
-    return map { $self->_expand_configuration($_) } @standard_configurations;
+    return bless {
+        options_list   => \@options_list,
+        configurations => [@standard_configurations],
+
+        test_jobs         =>  6,
+        harness_verbosity => -2,
+
+        %args,
+    }, $class;
 }
 
 
-# convert a configuration as specified above, into something that can be fed to
-# Configure.pl.  Can currently handle:
-#
-# + just a hashref (returns it directly)
-# + if an item ends in a question mark, two configs are returned:  one with,
-#   and one without
-# + if it's the string 'random', it returns a randomly generated configuration.
-#
-# always returns a list of one or more hashrefs.
-sub _expand_configuration
+# tries to work out what options Parrot's Configure.pl currently supports, and
+# which actually have an effect on the build (ie. isn't disabled by default due
+# to missing dependencies).  uses that information to initialise the random
+# config generator.
+sub deduce_options
 {
-    my ($self, $config) = @_;
+    my ($self) = @_;
 
-    return
-        $config eq 'random' ? Tie::Pick::FETCH($self->{random_config_generator}) :
-        $config ~~ qr(\?)   ? ([ grep !m{\?}, @$config ], [ map { s/\?//; $_ } @$config ])               :
-                              $config                                            ;
+    return if $self->{random_config_generator};  # already done this
+
+    my @all_options = @{$self->{options_list}};
+
+    eval {
+        require Parrot::Configure::Options::Conf::Shared;
+        require Parrot::Config;
+
+        # remove any --without-* options that aren't supported
+        foreach my $opt (@Parrot::Configure::Options::Conf::Shared::shared_valid_options) {
+            my ($n) = ($opt =~ m{^without-(\w+)}) or next;
+
+            # ignore it if it's been found to be missing (but err on the
+            # generous side).
+            next if exists $Parrot::Config::PConfig{"has_$n"}
+                and    not $Parrot::Config::PConfig{"has_$n"};
+
+            push @all_options, "--$opt";
+        }
+    };
+
+    # if it's 64-bit
+    # FIXME currently bombs out with linker errors.
+#    push @all_options, '--m=32' if $Config{ptrsize} == 8;
+
+    $self->{random_config_generator} = random_config_generator(@all_options);
+
+    return @all_options;
 }
 
 
@@ -105,6 +105,40 @@ sub random_config_generator
 }
 
 
+# returns an arrayref representing the next configuration to test.
+#
+# Configurations can be specified as any of the following:
+# + just a hashref (returns it directly)
+# + if an item ends in a question mark, two configs will be generated:  one with,
+#   and one without
+# + if it's the string 'random', it returns a randomly generated configuration.
+sub next_configuration
+{
+    my ($self) = @_;
+
+    my $next_config = shift @{$self->{configurations}} or return;
+    my $config;
+
+    given ($next_config) {
+        when ('random') {
+            $self->deduce_options;
+            $config = Tie::Pick::FETCH($self->{random_config_generator});
+        }
+        when (qr(\?)) {
+            # queue the "with" config up for next time, and return the
+            # "without" config now.
+            $config = [ grep !m{\?}, @$next_config ];
+            unshift @{$self->{configurations}}, [ map { s/\?//; $_ } @$next_config ];
+        }
+        default {
+            $config = $next_config;
+        }
+    }
+
+    return $config;
+}
+
+
 # flattens a list
 sub _flatten { return map { ref eq 'ARRAY' ? @$_ : $_ } @_ }
 
@@ -114,7 +148,9 @@ sub run_tests
 {
     my ($self) = @_;
 
-    $self->test_configuration($_) foreach $self->configuration_list;
+    while (my $c = $self->next_configuration) {
+        $self->test_configuration($c);
+    }
 
     return;
 }
@@ -129,8 +165,8 @@ sub test_configuration
     my @configuration = _flatten(@$configuration);
 
     # FIXME not a great place to put it...
-    local $ENV{TEST_JOBS}       = $config{test_jobs};
-    local $ENV{HARNESS_VERBOSE} = $config{harness_verbosity};
+    local $ENV{TEST_JOBS}       = $self->{test_jobs};
+    local $ENV{HARNESS_VERBOSE} = $self->{harness_verbosity};
 
     # FIXME this is quite ugly...
     my @build_commands = (

@@ -15,78 +15,119 @@ use Data::Dumper;
 
 use Sheba::Tester;
 
-use constant HAVE_TEST_OUTPUT => eval {
-    require Test::Output;
-};
-
+use constant HAVE_TEST_OUTPUT       => eval { require Test::Output       };
+use constant HAVE_DIRECTORY_SCRATCH => eval { require Directory::Scratch };
 
 ### new
 new_ok('Sheba::Tester');
 
 
-### configuration_list
-=cut
+### deduce_options
 {
-    my $tester = Sheba::Tester->new();
+    my $defaults = [
+        [qw( --one --two --three )],
+        '--four',
+    ];
 
-    {
-        my @configs = $tester->configuration_list();
-        eq_or_diff($configs[0], [ qw( --optimize --without-gmp )], 'static config only');
+    my $tester = Sheba::Tester->new(
+        options_list => $defaults,
+    );
 
-        $tester->{$tester->configuration_list} = [
-            [qw( --optimize --without-gmp )],
-            ('random') x 2,
-        ];
-    }
-    {
-        my @configs = $tester->configuration_list();
-        is(scalar @configs, 3, 'got 3 configs') or next;
-        eq_or_diff($configs[0], [ qw( --optimize --without-gmp )], 'static config is first');
-
-        is("@{$configs[1]}", "@{$configs[1]}", 'the random configuration is equal to ittester (sanity check)');
-        isnt("@{$configs[1]}", "@{$configs[2]}", 'the random configurations are different');
-    }
+    eq_or_diff(
+        [ grep { $_ ne '--m=32' } $tester->deduce_options ],
+        $defaults,
+        'got some defaults'
+    );
+    ok($tester->{random_config_generator}, 'initialised the random config generator');
 }
-=cut
-
-
-### _expand_configurations
 {
-    my @tests = (
-        [
-            [qw( --without-one --without-two )], [
-                [qw( --without-one --without-two )],
-            ], 'single config',
-        ],
-        [
-            [qw( --without-one --without-two? )], [
-                [qw( --without-one )],
-                [qw( --without-one --without-two )],
-            ], 'with an optional item',
+    my $defaults = [
+        [qw( --one --two --three )],
+        '--four',
+    ];
+
+    my $tester = Sheba::Tester->new(
+        options_list => $defaults,
+    );
+
+
+    # mmmh, evil...
+    my $dir = Directory::Scratch->new();
+
+    $dir->touch('Parrot/Configure/Options/Conf/Shared.pm', <<'EOT');
+package Parrot::Configure::Options::Conf::Shared;
+
+our @shared_valid_options = qw(
+    five
+    without-six
+    without-seven
+    without-eight
+);
+
+1;
+EOT
+
+    $dir->touch('Parrot/Config.pm', <<'EOT');
+package Parrot::Config;
+
+our %PConfig = (
+    has_six   => 1,  # if it exists, we can turn it off
+    has_seven => 0,  # not supported anyway
+                     # has_eight isn't mentioned at all
+);
+
+1;
+EOT
+
+    local @INC = ("$dir", @INC);
+
+    eq_or_diff([ grep { $_ ne '--m=32' } $tester->deduce_options ], [
+        @$defaults,
+        qw( --without-six --without-eight ),
+    ], 'identified some extra options');
+
+    ok($tester->{random_config_generator}, 'initialised the random config generator');
+}
+
+
+### next_configuration
+{
+    my $tester = Sheba::Tester->new(
+        configurations => [
+            [],
+            [qw( --without-gmp --optimize  )],
+            [qw( --without-icu --optimize? )],
+            'random',
         ],
     );
 
-    my $tester = Sheba::Tester->new();
+    my @expected = (
+        [],
+        [qw( --without-gmp --optimize )],
+        [qw( --without-icu )],
+        [qw( --without-icu --optimize )],
+    );
 
-    foreach my $t (@tests) {
-        my ($in, $out, $desc) = @$t;
-        eq_or_diff([ $tester->_expand_configuration($in) ], $out, $desc);
+    foreach (@expected) {
+        eq_or_diff($tester->next_configuration, $_, 'got a config');
     }
+
+    is(ref $tester->next_configuration, 'ARRAY', 'random config got inflated');
+
+    ok(! $tester->next_configuration, 'no more configs');
 }
 
 
 ### random_config_generator
 {
-    ok(Sheba::Tester::random_config_generator(qw( 1 2 3 )), 'returns a generator thing');
+    ok(Sheba::Tester::random_config_generator(), 'returns a generator thing');
     # FIXME actually do something with this?
 }
+
 
 ### _flatten
 eq_or_diff([ Sheba::Tester::_flatten(1, 2, 3) ],    [ 1, 2, 3], 'flat list');
 eq_or_diff([ Sheba::Tester::_flatten(1, [ 2, 3]) ], [ 1, 2, 3], 'nested list');
-
-
-### run_tests
 
 
 ### test_configuration
