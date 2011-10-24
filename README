@@ -1,0 +1,14 @@
+
+Sheba, a smoke tester for Parrot (and possibly other things)
+============================================================
+
+Sheba is a little command-line application for automatically smoke-testing
+Parrot under various configurations.
+
+It provides two interfaces:
+
+sheba.pl   -- builds and tests various configurations of the Parrot source tree
+              in the current directory.
+nicaule.pl -- like the above, but integrates with Git.  Automatically pulls the
+              latest changes, and tests one or more branches in turn.
+
