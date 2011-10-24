@@ -164,6 +164,8 @@ sub test_configuration
 
     my @configuration = _flatten(@$configuration);
 
+    say "Testing configuration '@configuration'";
+
     # FIXME not a great place to put it...
     local $ENV{TEST_JOBS}       = $self->{test_jobs};
     local $ENV{HARNESS_VERBOSE} = $self->{harness_verbosity};
